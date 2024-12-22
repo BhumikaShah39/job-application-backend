@@ -42,7 +42,6 @@ export const login = async (req, res) => {
   try {
     const { email, password } = req.body;
 
-  
     const user = await User.findOne({ email });
     if (!user) {
       return res.status(404).json({ message: `User with email ${email} not found.` });
@@ -55,11 +54,17 @@ export const login = async (req, res) => {
 
     // Generate JWT token
     const token = jwt.sign({ _id: user._id, role: user.role }, process.env.JWTPRIVATEKEY, {
-      expiresIn: '1h',
+      expiresIn: "1h",
     });
 
-    res.status(200).json({ token });
-
+    res.status(200).json({
+      token,
+      user: {
+        _id: user._id,
+        email: user.email,
+        role: user.role,
+      },
+    });
   } catch (err) {
     console.error("Error:", err);
     res.status(500).json({ message: "Something went wrong", error: err.message });
