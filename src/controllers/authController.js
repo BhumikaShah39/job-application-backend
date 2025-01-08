@@ -11,6 +11,11 @@ export const register = async (req, res) => {
 
     const { firstName, lastName, email, password, role } = req.body;
 
+    // Disallow admin registration
+    if (role === "admin") {
+      return res.status(403).json({ message: "Cannot register as admin." });
+    }
+
     const saltRounds = parseInt(process.env.SALT, 10);
     if (isNaN(saltRounds) || saltRounds < 4 || saltRounds > 31) {
       return res.status(400).json({ message: "Invalid salt rounds" });
@@ -47,6 +52,14 @@ export const login = async (req, res) => {
       return res.status(404).json({ message: `User with email ${email} not found.` });
     }
 
+    // Special check for admin role
+    if (user.role === "admin") {
+      // Verify email matches the pre-registered admin
+      if (email !== process.env.ADMIN_EMAIL) {
+        return res.status(403).json({ message: "Only the pre-registered admin can log in as admin." });
+      }
+    }
+
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
       return res.status(401).json({ message: `Invalid credentials` });
@@ -61,6 +74,8 @@ export const login = async (req, res) => {
       token,
       user: {
         _id: user._id,
+        firstName: user.firstName,
+        lastName: user.lastName,
         email: user.email,
         role: user.role,
       },

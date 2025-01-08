@@ -4,6 +4,7 @@ import cors from 'cors';
 import { connectDB } from './config/dbConnect.js';
 import authRoutes from './routes/authRoutes.js';
 import userRoutes from './routes/userRoutes.js';
+import jobRoutes from "./routes/jobRoutes.js";
 
 
 
@@ -17,6 +18,7 @@ app.use(cors());
 // Routes
 app.use("/api/auth", authRoutes);
 app.use("/api/users",userRoutes);
+app.use("/api/jobs", jobRoutes);
 
 console.log(process.env.MONGO_URI);
 
