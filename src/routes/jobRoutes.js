@@ -36,4 +36,50 @@ router.get("/all", verifyToken, async (req, res) => {
   }
 });
 
+// Get total number of jobs
+router.get("/count", verifyToken, authorizeRoles("admin"), async (req, res) => {
+  try {
+    const jobCount = await Job.countDocuments({});
+    res.status(200).json({ count: jobCount });
+  } catch (error) {
+    console.error("Error fetching job count:", error);
+    res.status(500).json({ message: "Failed to fetch job count" });
+  }
+});
+
+
+// Update job by ID
+router.put("/update/:id", async (req, res) => {
+  console.log("Update request received for ID:", req.params.id);
+  console.log("Request body:", req.body);
+  const { id } = req.params;
+
+  try {
+    const updatedJob = await Job.findByIdAndUpdate(id, req.body, { new: true });
+
+    if (!updatedJob) {
+      return res.status(404).json({ message: "Job not found" });
+    }
+
+    res.status(200).json({ message: "Job updated successfully", job: updatedJob });
+  } catch (error) {
+    res.status(500).json({ message: "Failed to update job", error });
+  }
+});
+
+router.delete('/:id', async (req, res) => {
+  const { id } = req.params;
+  try {
+    const job = await Job.findByIdAndDelete(id);
+    if (!job) {
+      return res.status(404).json({ message: 'Job not found' });
+    }
+    res.status(200).json({ message: 'Job deleted successfully' });
+  } catch (error) {
+    res.status(500).json({ message: 'Failed to delete job', error });
+  }
+});
+
+
+
 export default router;

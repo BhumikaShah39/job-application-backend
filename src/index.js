@@ -20,6 +20,7 @@ app.use("/api/auth", authRoutes);
 app.use("/api/users",userRoutes);
 app.use("/api/jobs", jobRoutes);
 
+
 console.log(process.env.MONGO_URI);
 
 // Start the server
