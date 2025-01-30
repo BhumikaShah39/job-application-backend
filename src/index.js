@@ -5,7 +5,7 @@ import { connectDB } from './config/dbConnect.js';
 import authRoutes from './routes/authRoutes.js';
 import userRoutes from './routes/userRoutes.js';
 import jobRoutes from "./routes/jobRoutes.js";
-
+import applicationRoutes from "./routes/applicationRoutes.js";
 
 
 dotenv.config();
@@ -19,6 +19,10 @@ app.use(cors());
 app.use("/api/auth", authRoutes);
 app.use("/api/users",userRoutes);
 app.use("/api/jobs", jobRoutes);
+console.log("Using applicationRoutes at /api");
+app.use("/api", applicationRoutes);
+//app.use(express.urlencoded({ extended: true }));
+
 
 
 console.log(process.env.MONGO_URI);

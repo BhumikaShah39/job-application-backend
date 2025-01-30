@@ -23,7 +23,36 @@ const userSchema = new mongoose.Schema({
     type: String,
     required: true,
     enum: ["admin","hirer","user"],
-  }
+  },
+  
+  interests: {
+    type: [String],
+  },
+  education: {
+    type: [String],
+  },
+  skills: {
+    type: [String],
+  },
+  linkedin: {
+    type: String,
+  },
+  github: {
+    type: String,
+  },
+  experience: {
+    type: [String],
+  },
+  profilePicture: {
+      type: String, // Path to the uploaded image file
+      default: null,
+    },
+
+  isProfileComplete: {
+    type: Boolean,
+    default: false, // Default to false for new users
+  },
+
 
 
 },
