@@ -59,4 +59,16 @@ router.get('/applications/hirer',verifyToken,async(req,res) =>{
     res.status(500).json({message:'Internal Server Error'});
   }
 });
+
+
+router.get('/applications/freelancer',verifyToken,async(req,res) => {
+  try{
+    const applications = await Application.find({userId:req.user._id})
+    .populate('jobId','title company location jobType');
+    res.status(200).json(applications);
+  }catch(error){
+    console.log("Error fetching freelancer applications",error);
+    res.status(500).json({message:"Internal Server Error"});
+  }
+});
 export default router;

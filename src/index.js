@@ -6,23 +6,35 @@ import authRoutes from './routes/authRoutes.js';
 import userRoutes from './routes/userRoutes.js';
 import jobRoutes from "./routes/jobRoutes.js";
 import applicationRoutes from "./routes/applicationRoutes.js";
+import path from "path";
+import { fileURLToPath } from "url";
+
 
 
 dotenv.config();
 const app = express();
 
+// __dirname in ES module environments
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
 // Middleware
 app.use(express.json());
 app.use(cors()); 
+
+// Serve static files from the "uploads" folder
+app.use("/uploads", express.static("uploads"));
+
 
 // Routes
 app.use("/api/auth", authRoutes);
 app.use("/api/users",userRoutes);
 app.use("/api/jobs", jobRoutes);
-console.log("Using applicationRoutes at /api");
 app.use("/api", applicationRoutes);
-//app.use(express.urlencoded({ extended: true }));
 
+
+
+console.log("Static files served from:", path.join(__dirname, "uploads"));
 
 
 console.log(process.env.MONGO_URI);
