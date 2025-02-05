@@ -2,6 +2,7 @@ import express from "express";
 import verifyToken from "../middlewares/authMiddleware.js";
 import multer from "multer";
 import Application from "../models/applicationModel.js"; 
+import Job from "../models/jobModel.js"
 
 const router = express.Router();
 
@@ -40,4 +41,22 @@ router.post("/applications/apply", verifyToken, upload.single("resume"), async (
   }
 });
 
+
+
+router.get('/applications/hirer',verifyToken,async(req,res) =>{
+  try{
+    const jobs = await Job.find({ hirer: req.user._id });
+    
+    const jobIds = jobs.map( jobs => jobs._id);
+
+    const applications = await Application.find({ jobId:{ $in: jobIds}})
+    .populate('userId','firstName lastName email skills education github linkedin')
+    .populate('jobId','title');
+
+    res.status(200).json(applications);
+  }catch (error){
+    console.error ('Error fetching applications',error);
+    res.status(500).json({message:'Internal Server Error'});
+  }
+});
 export default router;
