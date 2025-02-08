@@ -3,6 +3,8 @@ import verifyToken from "../middlewares/authMiddleware.js";
 import multer from "multer";
 import Application from "../models/applicationModel.js"; 
 import Job from "../models/jobModel.js"
+import Notification from "../models/notificationModel.js";
+import { sendEmail } from "../utils/emailSender.js";
 
 const router = express.Router();
 
@@ -23,6 +25,7 @@ router.post("/applications/apply", verifyToken, upload.single("resume"), async (
   try {
     
     const { jobId, coverLetter } = req.body;
+    const job = await Job.findById(jobId).populate("hirer", "email");
 
     const newApplication = {
       userId: req.user._id,
@@ -33,6 +36,23 @@ router.post("/applications/apply", verifyToken, upload.single("resume"), async (
 
     // Save the application to the database
     await Application.create(newApplication);
+
+
+    // Create In-App Notification
+    const notification = new Notification({
+      hirerId: job.hirer._id,
+      message: `You received a new application for "${job.title}".`,
+    });
+    await notification.save();
+
+    // Send Real-Time Notification
+    const io = req.app.get("io");
+    io.emit("newApplication", { userId: job.hirer._id, message: notification.message });
+
+    // Send Email Notification
+    if (job.hirer.email) {
+      await sendEmail(job.hirer.email, "New Job Application Received", notification.message);
+    }
 
     res.status(200).json({ message: "Application submitted successfully" });
   } catch (error) {
