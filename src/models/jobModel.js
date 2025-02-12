@@ -29,6 +29,9 @@ const jobSchema = new mongoose.Schema(
       ref: "User",
       required: true,
     },
+    // models/jobModel.js
+    savedBy: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }]
+
   },
   { timestamps: true }
 );

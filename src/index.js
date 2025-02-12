@@ -11,6 +11,7 @@ import applicationRoutes from "./routes/applicationRoutes.js";
 import path from "path";
 import { fileURLToPath } from "url";
 import notificationRoutes from './routes/notificationRoutes.js';
+import savedJobRoutes from "./routes/savedJobRoutes.js";
 
 dotenv.config();
 const app = express();
@@ -56,6 +57,7 @@ app.use("/api/users", userRoutes);
 app.use("/api/jobs", jobRoutes);
 app.use("/api", applicationRoutes);
 app.use('/api', notificationRoutes);
+app.use("/api/saved-jobs", savedJobRoutes); 
 
 console.log("Static files served from:", path.join(__dirname, "uploads"));
 console.log(process.env.MONGO_URI);
