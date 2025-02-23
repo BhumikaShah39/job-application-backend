@@ -3,7 +3,7 @@ import { addJob } from "../controllers/jobController.js";
 import verifyToken from "../middlewares/authMiddleware.js";
 import authorizeRoles from "../middlewares/roleMiddleware.js";
 import Job from "../models/jobModel.js"; 
-
+import { searchJobs,getSearchHistory } from "../controllers/jobController.js";
 
 const router = express.Router();
 
@@ -80,6 +80,9 @@ router.delete('/:id', async (req, res) => {
   }
 });
 
+
+router.get("/search", verifyToken, searchJobs);
+router.get("/search-history", verifyToken, getSearchHistory);
 
 
 export default router;
