@@ -7,8 +7,6 @@ dotenv.config();
 
 export const register = async (req, res) => {
   try {
-    
-
     const { firstName, lastName, email, password, role } = req.body;
 
     // Disallow admin registration
@@ -23,7 +21,6 @@ export const register = async (req, res) => {
 
     const hashedPassword = await bcrypt.hash(password, saltRounds);
 
-    
     const newUser = new User({
       firstName,
       lastName,
@@ -34,9 +31,24 @@ export const register = async (req, res) => {
 
     await newUser.save(); // Save to DB
 
-  
-    res.status(201).json({ message: `User registered with email ${email}` });
+    // Generate JWT token
+    const token = jwt.sign(
+      { _id: newUser._id, email: newUser.email, role: newUser.role, firstName: newUser.firstName, lastName: newUser.lastName },
+      process.env.JWTPRIVATEKEY,
+      { expiresIn: "2h" } // Set to 2 hours for consistency with authRoutes.js
+    );
 
+    res.status(201).json({
+      message: `User registered with email ${email}`,
+      token,
+      user: {
+        _id: newUser._id,
+        firstName: newUser.firstName,
+        lastName: newUser.lastName,
+        email: newUser.email,
+        role: newUser.role,
+      },
+    });
   } catch (err) {
     console.error("Error:", err.message);
     res.status(500).json({ message: "Something went wrong", error: err.message });
@@ -54,7 +66,6 @@ export const login = async (req, res) => {
 
     // Special check for admin role
     if (user.role === "admin") {
-      // Verify email matches the pre-registered admin
       if (email !== process.env.ADMIN_EMAIL) {
         return res.status(403).json({ message: "Only the pre-registered admin can log in as admin." });
       }
@@ -66,9 +77,11 @@ export const login = async (req, res) => {
     }
 
     // Generate JWT token
-    const token = jwt.sign({ _id: user._id, role: user.role }, process.env.JWTPRIVATEKEY, {
-      expiresIn: "1h",
-    });
+    const token = jwt.sign(
+      { _id: user._id, email: user.email, role: user.role, firstName: user.firstName, lastName: user.lastName },
+      process.env.JWTPRIVATEKEY,
+      { expiresIn: "2h" } // Set to 2 hours for consistency with authRoutes.js
+    );
 
     res.status(200).json({
       token,
@@ -85,7 +98,6 @@ export const login = async (req, res) => {
     res.status(500).json({ message: "Something went wrong", error: err.message });
   }
 };
-
 
 export const getCurrentUser = async (req, res) => {
   try {

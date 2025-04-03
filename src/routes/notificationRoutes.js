@@ -5,14 +5,22 @@ import verifyToken from '../middlewares/authMiddleware.js';
 
 const router = express.Router();
 
-//  Get All Unread + 7 Recent Read Notifications
+// Get all unread + 7 recent read notifications 
 router.get('/notifications', verifyToken, async (req, res) => {
   try {
-    const unreadNotifications = await Notification.find({ hirerId: req.user._id, isRead: false }).sort({ timestamp: -1 });
-    const readNotifications = await Notification.find({ hirerId: req.user._id, isRead: true }).sort({ timestamp: -1 }).limit(10);
+    const userId = req.user._id;
+    const unreadNotifications = await Notification.find({
+      $or: [{ hirerId: userId }, { freelancerId: userId }],
+      isRead: false,
+    }).sort({ timestamp: -1 });
+    const readNotifications = await Notification.find({
+      $or: [{ hirerId: userId }, { freelancerId: userId }],
+      isRead: true,
+    })
+      .sort({ timestamp: -1 })
+      .limit(7);
 
     const notifications = [...unreadNotifications, ...readNotifications];
-
     res.status(200).json(notifications);
   } catch (error) {
     console.error('Error fetching notifications:', error);

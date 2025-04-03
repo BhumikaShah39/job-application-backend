@@ -7,6 +7,7 @@ const applicationSchema = new mongoose.Schema(
     coverLetter: { type: String, required: true },
     resume: { type: String }, // File path of uploaded resume
     status: { type: String, default: "Pending" }, // e.g., Pending, Approved, Rejected
+    
   },
   { timestamps: true }
 );
