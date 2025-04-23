@@ -1,9 +1,8 @@
 import express from "express";
-import { addJob } from "../controllers/jobController.js";
+import { addJob, searchJobs, getSearchHistory } from "../controllers/jobController.js";
 import verifyToken from "../middlewares/authMiddleware.js";
 import authorizeRoles from "../middlewares/roleMiddleware.js";
-import Job from "../models/jobModel.js"; 
-import { searchJobs,getSearchHistory } from "../controllers/jobController.js";
+import Job from "../models/jobModel.js";
 
 const router = express.Router();
 
@@ -12,11 +11,14 @@ router.post("/add", verifyToken, authorizeRoles("hirer"), addJob);
 
 router.get("/added-by-you", verifyToken, async (req, res) => {
   try {
-    const jobs = await Job.find({ hirer: req.user._id }).populate("hirer", "firstName lastName");
+    const jobs = await Job.find({ hirer: req.user._id }).populate(
+      "hirer",
+      "firstName lastName"
+    );
     console.log("Decoded User ID:", req.user._id);
 
     if (!jobs.length) {
-      return res.status(200).json({ jobs: [] }); // Return empty array if no jobs found
+      return res.status(200).json({ jobs: [] });
     }
     res.status(200).json({ jobs });
   } catch (error) {
@@ -47,7 +49,6 @@ router.get("/count", verifyToken, authorizeRoles("admin"), async (req, res) => {
   }
 });
 
-
 // Update job by ID
 router.put("/update/:id", async (req, res) => {
   console.log("Update request received for ID:", req.params.id);
@@ -67,22 +68,48 @@ router.put("/update/:id", async (req, res) => {
   }
 });
 
-router.delete('/:id', async (req, res) => {
+// Delete a job
+router.delete("/:id", async (req, res) => {
   const { id } = req.params;
   try {
     const job = await Job.findByIdAndDelete(id);
     if (!job) {
-      return res.status(404).json({ message: 'Job not found' });
+      return res.status(404).json({ message: "Job not found" });
     }
-    res.status(200).json({ message: 'Job deleted successfully' });
+    res.status(200).json({ message: "Job deleted successfully" });
   } catch (error) {
-    res.status(500).json({ message: 'Failed to delete job', error });
+    res.status(500).json({ message: "Failed to delete job", error });
   }
 });
 
+// Get job analytics (updated for daily stats)
+router.get("/analytics", verifyToken, authorizeRoles("admin"), async (req, res) => {
+  try {
+    const totalJobs = await Job.countDocuments();
+
+    // Calculate job growth (daily job posts)
+    const dailyStats = await Job.aggregate([
+      {
+        $group: {
+          _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } },
+          count: { $sum: 1 },
+        },
+      },
+      { $sort: { "_id": 1 } },
+      { $project: { date: "$_id", count: 1, _id: 0 } },
+    ]);
+
+    res.status(200).json({
+      totalCount: totalJobs,  // Changed to match frontend expectation
+      dailyStats,             // Changed to daily stats in expected format
+    });
+  } catch (error) {
+    console.error("Error fetching job analytics:", error);
+    res.status(500).json({ message: "Server error" });
+  }
+});
 
 router.get("/search", verifyToken, searchJobs);
 router.get("/search-history", verifyToken, getSearchHistory);
-
 
 export default router;

@@ -1,15 +1,30 @@
 import mongoose from "mongoose";
 
-const applicationSchema = new mongoose.Schema(
-  {
-    userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
-    jobId: { type: mongoose.Schema.Types.ObjectId, ref: "Job", required: true },
-    coverLetter: { type: String, required: true },
-    resume: { type: String }, // File path of uploaded resume
-    status: { type: String, default: "Pending" }, // e.g., Pending, Approved, Rejected
+const applicationSchema = new mongoose.Schema({
+  userId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "User",
+    required: true,
   },
-  { timestamps: true }
-);
+  jobId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "Job",
+    required: true,
+  },
+  coverLetter: {
+    type: String,
+    required: true,
+  },
+  resume: {
+    type: String,
+  },
+  status: {
+    type: String,
+    enum: ["Pending", "Accepted", "Rejected", "Hired"],
+    default: "Pending",
+  },
+}, {
+  timestamps: true,
+});
 
-const Application = mongoose.model("Application", applicationSchema);
-export default Application;
+export default mongoose.model("Application", applicationSchema);

@@ -52,6 +52,7 @@ const userSchema = new mongoose.Schema({
     type: Boolean,
     default: false, // Default to false for new users
   },
+  googleTokens: { type: Object },
 
 
 

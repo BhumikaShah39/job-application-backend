@@ -3,15 +3,16 @@ import verifyToken from "../middlewares/authMiddleware.js";
 import authorizeRoles from "../middlewares/roleMiddleware.js";
 import User from "../models/userModel.js";
 import multer from "multer";
+
 const router = express.Router();
 
 // Configure multer for file uploads
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    cb(null, "uploads/"); //directory where uploaded files will be stored
+    cb(null, "uploads/");
   },
   filename: (req, file, cb) => {
-    cb(null, Date.now() + "-" + file.originalname); // Generate a unique filename
+    cb(null, Date.now() + "-" + file.originalname);
   },
 });
 
@@ -20,7 +21,7 @@ const upload = multer({ storage });
 // Admin access
 router.get("/admin/:id", verifyToken, authorizeRoles("admin"), async (req, res) => {
   try {
-    const { id } = req.params; // Extract user ID from route parameter
+    const { id } = req.params;
     if (req.user._id !== id) {
       return res.status(403).json({ message: "Unauthorized access" });
     }
@@ -34,7 +35,7 @@ router.get("/admin/:id", verifyToken, authorizeRoles("admin"), async (req, res) 
 // Hirer access
 router.get("/hirer/:id", verifyToken, authorizeRoles("hirer"), async (req, res) => {
   try {
-    const { id } = req.params; // Extract user ID from route parameter
+    const { id } = req.params;
     if (req.user._id !== id) {
       return res.status(403).json({ message: "Unauthorized access" });
     }
@@ -49,25 +50,21 @@ router.get("/hirer/:id", verifyToken, authorizeRoles("hirer"), async (req, res) 
 router.get("/user/:id", verifyToken, authorizeRoles("user"), async (req, res) => {
   try {
     const { id } = req.params;
-
-    
     if (req.user._id !== id) {
       return res.status(403).json({ message: "Unauthorized access" });
     }
-
-    
-    const user = await User.findById(id).select("firstName lastName email isProfileComplete interests education skills linkedin github experience");
+    const user = await User.findById(id).select(
+      "firstName lastName email isProfileComplete interests education skills linkedin github experience"
+    );
     if (!user) {
       return res.status(404).json({ message: "User not found" });
     }
-
-    res.status(200).json(user); 
+    res.status(200).json(user);
   } catch (error) {
     console.error("Error fetching user:", error);
     res.status(500).json({ message: "Internal server error" });
   }
 });
-
 
 // Get total number of users
 router.get("/count", verifyToken, authorizeRoles("admin"), async (req, res) => {
@@ -80,10 +77,10 @@ router.get("/count", verifyToken, authorizeRoles("admin"), async (req, res) => {
   }
 });
 
-// userRoutes.js
+// Get all users
 router.get("/", verifyToken, authorizeRoles("admin"), async (req, res) => {
   try {
-    const users = await User.find().select("-password"); 
+    const users = await User.find().select("-password");
     res.status(200).json(users);
   } catch (error) {
     console.error("Error fetching users:", error);
@@ -91,47 +88,55 @@ router.get("/", verifyToken, authorizeRoles("admin"), async (req, res) => {
   }
 });
 
-
-
-// Update profile for freelancers
-router.put("/complete-profile", verifyToken, authorizeRoles("user"),upload.single("profilePicture"), async (req, res) => {
+// Delete a user (Admin only)
+router.delete("/:id", verifyToken, authorizeRoles("admin"), async (req, res) => {
   try {
-    
-    const { interests, education, skills, linkedin, github, experience } = req.body;
-
-    const userId = req.user._id; // Extract user ID from the token
-
-     // Validate file upload
-     if (!req.file) {
-      return res.status(400).json({ message: "Profile picture is required." });
-    }
-
-    // Parse JSON strings from the frontend
-    const parsedInterests = JSON.parse(interests);
-    const parsedEducation = JSON.parse(education);
-    const parsedSkills = JSON.parse(skills);
-    const parsedExperience = JSON.parse(experience);
-
-    // Find the user in the database
-    const user = await User.findById(userId);
-
+    const { id } = req.params;
+    const user = await User.findByIdAndDelete(id);
     if (!user) {
       return res.status(404).json({ message: "User not found" });
     }
+    res.status(200).json({ message: "User deleted successfully" });
+  } catch (error) {
+    console.error("Error deleting user:", error);
+    res.status(500).json({ message: "Failed to delete user" });
+  }
+});
 
-       // Update user profile fields
-       user.profilePicture = req.file.path;
-       user.interests = parsedInterests || [];
-       user.education = parsedEducation || [];
-       user.skills = parsedSkills || [];
-       user.linkedin = linkedin || "";
-       user.github = github || "";
-       user.experience = parsedExperience || [];
+// Update profile for freelancers
+router.put(
+  "/complete-profile",
+  verifyToken,
+  authorizeRoles("user"),
+  upload.single("profilePicture"),
+  async (req, res) => {
+    try {
+      const { interests, education, skills, linkedin, github, experience } = req.body;
+      const userId = req.user._id;
 
-    
+      if (!req.file) {
+        return res.status(400).json({ message: "Profile picture is required." });
+      }
 
-    // Check if all required fields are filled
-    const isComplete =
+      const parsedInterests = JSON.parse(interests);
+      const parsedEducation = JSON.parse(education);
+      const parsedSkills = JSON.parse(skills);
+      const parsedExperience = JSON.parse(experience);
+
+      const user = await User.findById(userId);
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      user.profilePicture = req.file.path;
+      user.interests = parsedInterests || [];
+      user.education = parsedEducation || [];
+      user.skills = parsedSkills || [];
+      user.linkedin = linkedin || "";
+      user.github = github || "";
+      user.experience = parsedExperience || [];
+
+      const isComplete =
         user.profilePicture &&
         user.interests.length > 0 &&
         user.education.length > 0 &&
@@ -140,42 +145,68 @@ router.put("/complete-profile", verifyToken, authorizeRoles("user"),upload.singl
         user.github &&
         user.experience.length > 0;
 
-    user.isProfileComplete = isComplete; 
+      user.isProfileComplete = isComplete;
 
-    // Save the updated user to the database
-    await user.save();
-    const updatedUser = await User.findById(userId);
+      await user.save();
+      const updatedUser = await User.findById(userId);
 
-    res.status(200).json({
-      message: isComplete
-        ? "Profile updated and marked as complete"
-        : "Profile updated, but still incomplete",
-      user,
-    });
+      res.status(200).json({
+        message: isComplete
+          ? "Profile updated and marked as complete"
+          : "Profile updated, but still incomplete",
+        user,
+      });
+    } catch (error) {
+      console.error("Error updating profile:", error);
+      res.status(500).json({ message: "Internal server error" });
+    }
+  }
+);
+
+router.get("/current", verifyToken, async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id).select(
+      "firstName lastName email role skills education profilePicture linkedin github interests experience isProfileComplete"
+    );
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+    res.status(200).json({ user });
   } catch (error) {
-    console.error("Error updating profile:", error);
+    console.error(error);
     res.status(500).json({ message: "Internal server error" });
   }
 });
 
-router.get('/current', verifyToken, async (req, res) => {
+// Get user analytics (updated for daily stats)
+router.get("/analytics", verifyToken, authorizeRoles("admin"), async (req, res) => {
   try {
-    const user = await User.findById(req.user._id).select(
-      'firstName lastName email role skills education profilePicture linkedin github interests experience isProfileComplete'
-    ); 
-    if (!user) {
-      return res.status(404).json({ message: 'User not found' });
-    }
-    res.status(200).json({ user }); 
+    const totalUsers = await User.countDocuments();
+    const hirers = await User.countDocuments({ role: "hirer" });
+    const freelancers = await User.countDocuments({ role: "user" });
+
+    // Calculate user growth (daily signups)
+    const dailyStats = await User.aggregate([
+      {
+        $group: {
+          _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } },
+          count: { $sum: 1 },
+        },
+      },
+      { $sort: { "_id": 1 } },
+      { $project: { date: "$_id", count: 1, _id: 0 } },
+    ]);
+
+    res.status(200).json({
+      totalCount: totalUsers,  // Changed to match frontend expectation
+      dailyStats,              // Changed to daily stats in expected format
+      hirers,                  // Keeping additional data
+      freelancers,             // Keeping additional data
+    });
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: 'Internal server error' });
+    console.error("Error fetching user analytics:", error);
+    res.status(500).json({ message: "Server error" });
   }
 });
-
-
-
-
-
 
 export default router;
