@@ -1,30 +1,29 @@
 import mongoose from "mongoose";
 
 const userSchema = new mongoose.Schema({
-  firstName:{
+  firstName: {
     type: String,
     required: true,
   },
-  lastName:{
+  lastName: {
     type: String,
     required: true,
   },
-  email:{
+  email: {
     type: String,
     required: true,
     unique: true,
     match: [/.+\@.+\..+/, 'Please fill a valid email address'],
   },
-  password:{
+  password: {
     type: String,
     required: true,
   },
-  role:{
+  role: {
     type: String,
     required: true,
-    enum: ["admin","hirer","user"],
+    enum: ["admin", "hirer", "user"],
   },
-  
   interests: {
     type: [String],
   },
@@ -44,22 +43,57 @@ const userSchema = new mongoose.Schema({
     type: [String],
   },
   profilePicture: {
-      type: String, // Path to the uploaded image file
-      default: null,
-    },
-
+    type: String,
+    default: null,
+  },
   isProfileComplete: {
     type: Boolean,
-    default: false, // Default to false for new users
+    default: false,
   },
-  googleTokens: { type: Object },
-
-
-
-},
-{
-  timestamps: true,
-});
+  googleTokens: {
+    type: Object,
+  },
+  businessDetails: {
+    type: {
+      companyName: { type: String },
+      industry: { type: String },
+      description: { type: String },
+      website: { type: String },
+    },
+    default: null,
+  },
+  pastWork: {
+    type: [{
+      title: { type: String },
+      description: { type: String },
+      duration: { type: String },
+    }],
+  },
+  ratings: [{
+    ratedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+    },
+    rating: {
+      type: Number,
+      min: 1,
+      max: 5,
+      default: null,
+    },
+    comment: {
+      type: String,
+    },
+    date: {
+      type: Date,
+      default: Date.now,
+    },
+  }],
+  resetPasswordToken: {
+    type: String,
+  },
+  resetPasswordExpires: {
+    type: Date,
+  },
+}, { timestamps: true });
 
 export default mongoose.model('User', userSchema);
-
