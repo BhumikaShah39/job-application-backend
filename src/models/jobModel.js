@@ -1,3 +1,4 @@
+// job-application-backend/src/models/jobModel.js
 import mongoose from "mongoose";
 
 const jobSchema = new mongoose.Schema(
@@ -23,15 +24,12 @@ const jobSchema = new mongoose.Schema(
       default: "In-app",
     },
     description: { type: String, required: true },
-
     hirer: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
       required: true,
     },
-    // models/jobModel.js
-    savedBy: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }]
-
+    savedBy: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
   },
   { timestamps: true }
 );
