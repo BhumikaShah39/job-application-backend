@@ -1,3 +1,4 @@
+// job-application-backend/src/routes/jobRoutes.js
 import express from "express";
 import { addJob, searchJobs, getSearchHistory } from "../controllers/jobController.js";
 import verifyToken from "../middlewares/authMiddleware.js";
@@ -27,10 +28,13 @@ router.get("/added-by-you", verifyToken, async (req, res) => {
   }
 });
 
-// Fetch all jobs
+// Fetch all jobs (Updated to populate hirer details)
 router.get("/all", verifyToken, async (req, res) => {
   try {
-    const jobs = await Job.find({}).populate("hirer", "firstName lastName");
+    const jobs = await Job.find({}).populate(
+      "hirer",
+      "firstName lastName email profilePicture businessDetails pastWork ratings"
+    );
     res.status(200).json({ jobs });
   } catch (error) {
     console.error("Error fetching all jobs:", error);
@@ -100,8 +104,8 @@ router.get("/analytics", verifyToken, authorizeRoles("admin"), async (req, res) 
     ]);
 
     res.status(200).json({
-      totalCount: totalJobs,  // Changed to match frontend expectation
-      dailyStats,             // Changed to daily stats in expected format
+      totalCount: totalJobs,
+      dailyStats,
     });
   } catch (error) {
     console.error("Error fetching job analytics:", error);
