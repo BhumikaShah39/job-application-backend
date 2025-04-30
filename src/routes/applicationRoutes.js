@@ -1,3 +1,4 @@
+// job-application-backend/src/routes/applicationRoutes.js
 import express from "express";
 import verifyToken from "../middlewares/authMiddleware.js";
 import multer from "multer";
@@ -5,6 +6,7 @@ import Application from "../models/applicationModel.js";
 import Job from "../models/jobModel.js";
 import Notification from "../models/notificationModel.js";
 import User from "../models/userModel.js";
+import ProfileEnhancement from "../models/profileEnhancementModel.js"; // Added this import
 import { sendEmail } from "../utils/emailSender.js";
 import fs from "fs";
 import path from "path";
@@ -135,10 +137,22 @@ router.get("/applications/hirer", verifyToken, async (req, res) => {
     const jobIds = jobs.map((job) => job._id);
 
     const applications = await Application.find({ jobId: { $in: jobIds } })
-      .populate("userId", "firstName lastName email skills education github linkedin")
+      .populate({
+        path: "userId",
+        select: "firstName lastName email skills education github linkedin profilePicture experience",
+      })
       .populate("jobId", "title");
-    console.log("Applications fetched for hirer:", req.user._id, applications);
-    res.status(200).json(applications);
+
+    // Fetch enhancements for each application's user
+    const applicationsWithEnhancements = await Promise.all(
+      applications.map(async (app) => {
+        const enhancements = await ProfileEnhancement.find({ userId: app.userId._id });
+        return { ...app.toObject(), userId: { ...app.userId.toObject(), enhancements } };
+      })
+    );
+
+    console.log("Applications fetched for hirer:", req.user._id, applicationsWithEnhancements);
+    res.status(200).json(applicationsWithEnhancements);
   } catch (error) {
     console.error("Error fetching applications", error);
     res.status(500).json({ message: "Internal Server Error" });
@@ -288,7 +302,7 @@ router.put("/applications/:id/status", verifyToken, async (req, res) => {
     console.log("User Google Authenticated:", isGoogleAuthenticated);
     res.status(200).json({
       message: `Application ${applicationStatus} successfully`,
-      isGoogleAuthenticated, // Signal frontend to show scheduling pop-up if true
+      isGoogleAuthenticated,
       applicationId: application._id,
     });
   } catch (error) {
@@ -386,7 +400,6 @@ router.post("/interviews", verifyToken, async (req, res) => {
       return res.status(400).json({ message: "Application ID and scheduled time are required" });
     }
 
-    
     const scheduledDate = new Date(scheduledTime);
     if (isNaN(scheduledDate.getTime())) {
       return res.status(400).json({ message: "Invalid scheduled time format" });
@@ -397,11 +410,6 @@ router.post("/interviews", verifyToken, async (req, res) => {
     if (scheduledDate <= now) {
       return res.status(400).json({ message: "Scheduled time must be in the future" });
     }
-
-    
-    // console.log("Received scheduledTime (UTC):", scheduledTime);
-    // console.log("Parsed scheduledDate (UTC):", scheduledDate.toISOString());
-    // console.log("Scheduled time in NPT:", scheduledDate.toLocaleString("en-US", { timeZone: "Asia/Kathmandu" }));
 
     // Fetch the hirer to get Google OAuth tokens
     const user = await User.findById(req.user._id);
@@ -640,7 +648,7 @@ router.put("/interviews/:id", verifyToken, async (req, res) => {
       path: "applicationId",
       populate: [
         { path: "userId", select: "email firstName" },
-        { path: "jobId", select: "title company hirer" },
+        { path: "jobId", select: "title company" },
       ],
     });
 
