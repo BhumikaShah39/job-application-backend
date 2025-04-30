@@ -1,9 +1,12 @@
-import express from 'express';
-import { register, login } from '../controllers/authController.js';
+import express from "express";
+import { register, login } from "../controllers/authController.js";
 import { google } from "googleapis";
 import session from "express-session";
-import jwt from 'jsonwebtoken';
-import  User  from '../models/userModel.js';
+import jwt from "jsonwebtoken";
+import User from "../models/userModel.js";
+import nodemailer from "nodemailer";
+import crypto from "crypto";
+import bcrypt from "bcrypt"; // Ensure bcrypt is imported
 
 const router = express.Router();
 
@@ -15,8 +18,6 @@ router.use(
   })
 );
 
-
-
 const oauth2Client = new google.auth.OAuth2(
   process.env.GOOGLE_CLIENT_ID,
   process.env.GOOGLE_CLIENT_SECRET,
@@ -24,9 +25,9 @@ const oauth2Client = new google.auth.OAuth2(
 );
 
 // Handle token refresh
-oauth2Client.on('tokens', async (tokens) => {
+oauth2Client.on("tokens", async (tokens) => {
   if (tokens.refresh_token) {
-    const user = await User.findOne({ 'googleTokens.refresh_token': tokens.refresh_token });
+    const user = await User.findOne({ "googleTokens.refresh_token": tokens.refresh_token });
     if (user) {
       user.googleTokens = tokens;
       await user.save();
@@ -44,13 +45,13 @@ router.get("/google", (req, res) => {
 
   const scopes = [
     "https://www.googleapis.com/auth/calendar",
-    "https://www.googleapis.com/auth/calendar.events"
+    "https://www.googleapis.com/auth/calendar.events",
   ];
   const url = oauth2Client.generateAuthUrl({
     access_type: "offline",
     scope: scopes,
     prompt: "consent",
-    state: encodeURIComponent(token)
+    state: encodeURIComponent(token),
   });
   console.log("Generated OAuth URL:", url);
   res.redirect(url);
@@ -73,9 +74,9 @@ router.get("/google/callback", async (req, res) => {
     const decodedState = decodeURIComponent(state);
     console.log("URL-decoded state:", decodedState);
 
-    const [header, payload, signature] = decodedState.split('.');
-    const decodedHeader = JSON.parse(Buffer.from(header, 'base64').toString());
-    const decodedPayload = JSON.parse(Buffer.from(payload, 'base64').toString());
+    const [header, payload, signature] = decodedState.split(".");
+    const decodedHeader = JSON.parse(Buffer.from(header, "base64").toString());
+    const decodedPayload = JSON.parse(Buffer.from(payload, "base64").toString());
     console.log("Decoded JWT Header:", decodedHeader);
     console.log("Decoded JWT Payload:", decodedPayload);
 
@@ -100,7 +101,7 @@ router.get("/google/callback", async (req, res) => {
       console.warn("No refresh token received — can't refresh later");
       return res.status(400).json({ message: "Google authentication failed. Please try again." });
     }
-    
+
     console.log("Google OAuth tokens:", tokens);
     oauth2Client.setCredentials(tokens);
 
@@ -121,7 +122,6 @@ router.get("/google/callback", async (req, res) => {
 
     console.log("Redirecting to dashboard with token:", userToken);
     res.redirect(`${process.env.FRONTEND_URL}/hirer/${user._id}?token=${userToken}`);
-    
   } catch (error) {
     console.error("Error in Google OAuth callback:", error.message);
     res.status(500).json({ message: "Authentication failed" });
@@ -133,6 +133,102 @@ router.get("/check-tokens", (req, res) => {
     res.json({ message: "Tokens found", tokens: req.session.googleTokens });
   } else {
     res.json({ message: "No tokens found" });
+  }
+});
+
+// Configure Nodemailer
+const transporter = nodemailer.createTransport({
+  service: "gmail",
+  auth: {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS,
+  },
+});
+
+// Forgot Password
+router.post("/forgot-password", async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({ message: "Email is required" });
+    }
+
+    const user = await User.findOne({ email });
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    const resetToken = crypto.randomBytes(20).toString("hex");
+    user.resetPasswordToken = resetToken;
+    user.resetPasswordExpires = Date.now() + 3600000; // 1 hour
+    await user.save();
+
+    const resetUrl = `http://localhost:5173/reset-password/${resetToken}`;
+    const mailOptions = {
+      from: process.env.EMAIL_USER,
+      to: user.email,
+      subject: "Password Reset Request",
+      html: `
+        <p>You are receiving this email because you (or someone else) requested a password reset for your account.</p>
+        <p>Please click the link below to reset your password:</p>
+        <p><a href="${resetUrl}">${resetUrl}</a></p>
+        <p>If you did not request this, please ignore this email.</p>
+      `,
+    };
+
+    await transporter.sendMail(mailOptions);
+
+    res.status(200).json({ message: "Password reset link sent to your email" });
+  } catch (error) {
+    console.error("Error in forgot password:", error);
+    res.status(500).json({ message: "Failed to send reset link" });
+  }
+});
+
+// Reset Password
+router.post("/reset-password", async (req, res) => {
+  try {
+    const { token, newPassword } = req.body;
+    console.log("Reset password request received with token:", token, "newPassword:", newPassword);
+
+    if (!token || !newPassword) {
+      console.log("Missing token or newPassword");
+      return res.status(400).json({ message: "Token and new password are required" });
+    }
+
+    console.log("Searching for user with token:", token);
+    const user = await User.findOne({
+      resetPasswordToken: token,
+      resetPasswordExpires: { $gt: Date.now() },
+    });
+
+    if (!user) {
+      console.log("Invalid or expired reset token");
+      return res.status(400).json({ message: "Invalid or expired reset token" });
+    }
+
+    console.log("Hashing new password...");
+    const saltRounds = 10;
+    const hashedPassword = await bcrypt.hash(newPassword, saltRounds);
+    console.log("Hashed password:", hashedPassword);
+
+    user.password = hashedPassword;
+    user.resetPasswordToken = undefined;
+    user.resetPasswordExpires = undefined;
+
+    console.log("Saving user with updated password...");
+    await user.save();
+    console.log("User saved successfully");
+
+    res.status(200).json({ message: "Password reset successfully" });
+  } catch (error) {
+    console.error("Error resetting password:", {
+      message: error.message,
+      stack: error.stack,
+      details: error,
+    });
+    res.status(500).json({ message: "Failed to reset password" });
   }
 });
 
