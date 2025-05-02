@@ -178,7 +178,7 @@ router.put(
   }
 );
 
-// Updated GET /api/users/current endpoint with better error handling
+
 // userRoutes.js (fixed)
 router.get("/current", verifyToken, async (req, res) => {
   try {
