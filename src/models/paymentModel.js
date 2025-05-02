@@ -39,6 +39,10 @@ const paymentSchema = new mongoose.Schema({
     enum: ["pending", "completed", "failed"],
     default: "pending",
   },
+  freelancerKhaltiId: {
+    type: String, // Store freelancer's Khalti ID for reference
+    required: false,
+  },
   createdAt: {
     type: Date,
     default: Date.now,
