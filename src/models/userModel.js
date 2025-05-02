@@ -94,6 +94,11 @@ const userSchema = new mongoose.Schema({
   resetPasswordExpires: {
     type: Date,
   },
+  khaltiId: { // New field for storing Khalti ID (phone number)
+    type: String,
+    default: null,
+    match: [/^\d{10}$/, 'Please enter a valid 10-digit phone number'],
+  },
 }, { timestamps: true });
 
 export default mongoose.model('User', userSchema);
