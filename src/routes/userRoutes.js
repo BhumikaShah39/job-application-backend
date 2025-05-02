@@ -113,7 +113,7 @@ router.put(
   upload.single("profilePicture"),
   async (req, res) => {
     try {
-      const { interests, education, skills, linkedin, github, experience } = req.body;
+      const { interests, education, skills, linkedin, github, experience, khaltiId } = req.body; // Added khaltiId
       const userId = req.user._id;
 
       // Parse the incoming data
@@ -139,6 +139,9 @@ router.put(
       user.linkedin = linkedin || "";
       user.github = github || "";
       user.experience = parsedExperience || [];
+      if (khaltiId) { // Update khaltiId if provided
+        user.khaltiId = khaltiId;
+      }
 
       // Role-specific isProfileComplete logic
       let isComplete;
@@ -176,6 +179,7 @@ router.put(
 );
 
 // Updated GET /api/users/current endpoint with better error handling
+// userRoutes.js (fixed)
 router.get("/current", verifyToken, async (req, res) => {
   try {
     console.log("Fetching user with ID:", req.user._id);
@@ -185,7 +189,7 @@ router.get("/current", verifyToken, async (req, res) => {
     }
 
     const user = await User.findById(req.user._id).select(
-      "firstName lastName email role skills education profilePicture linkedin github interests experience isProfileComplete"
+      "firstName lastName email role skills education profilePicture linkedin github interests experience isProfileComplete khaltiId createdAt updatedAt"
     );
     if (!user) {
       console.log("User not found for ID:", req.user._id);
@@ -193,13 +197,14 @@ router.get("/current", verifyToken, async (req, res) => {
     }
 
     console.log("User fetched successfully:", user);
-    res.status(200).json({ user });
+    const userData = user.toJSON();
+    userData.khaltiId = user.khaltiId || ""; // Fallback to empty string
+    res.status(200).json({ user: userData });
   } catch (error) {
     console.error("Error in /api/users/current:", error.message, error.stack);
     res.status(500).json({ message: "Internal server error", error: error.message });
   }
 });
-
 // Get user analytics (updated for daily stats)
 router.get("/analytics", verifyToken, authorizeRoles("admin"), async (req, res) => {
   try {
