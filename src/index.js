@@ -2,24 +2,25 @@ import http from 'http';
 import { Server } from 'socket.io';
 import express from 'express';
 import dotenv from 'dotenv';
-import cors from 'cors'; 
+import cors from 'cors';
 import session from "express-session";
 import { connectDB } from './config/dbConnect.js';
 import authRoutes from './routes/authRoutes.js';
 import userRoutes from './routes/userRoutes.js';
 import jobRoutes from "./routes/jobRoutes.js";
 import applicationRoutes from "./routes/applicationRoutes.js";
-import path from "path";
-import { fileURLToPath } from "url";
 import notificationRoutes from './routes/notificationRoutes.js';
 import savedJobRoutes from "./routes/savedJobRoutes.js";
 import recommendationRoutes from "./routes/recommendationRoutes.js";
 import projectRoutes from "./routes/projectRoutes.js";
-import cron from 'node-cron'; 
-import Interview from './models/interviewModel.js'; 
-import User from './models/userModel.js'; 
-import { google } from 'googleapis'; 
 import paymentRoutes from "./routes/paymentRoutes.js";
+import reviewRoutes from "./routes/reviewRoutes.js"; 
+import path from "path";
+import { fileURLToPath } from "url";
+import cron from 'node-cron';
+import Interview from './models/interviewModel.js';
+import User from './models/userModel.js';
+import { google } from 'googleapis';
 
 dotenv.config();
 const app = express();
@@ -58,6 +59,7 @@ app.use("/uploads/resumes", express.static(path.resolve("uploads/resumes")));
 app.use("/uploads", express.static(path.resolve("uploads")));
 app.use("/uploads/tasks", express.static(path.resolve("uploads/tasks")));
 
+// Routes
 app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/jobs", jobRoutes);
@@ -67,6 +69,18 @@ app.use("/api/saved-jobs", savedJobRoutes);
 app.use("/api/recommendations", recommendationRoutes);
 app.use("/api/projects", projectRoutes);
 app.use("/api/payment", paymentRoutes);
+app.use("/api/reviews", reviewRoutes); 
+
+// Basic route to verify server is running
+app.get("/", (req, res) => {
+  res.status(200).json({ message: "Server is running" });
+});
+
+// Error handling middleware
+app.use((err, req, res, next) => {
+  console.error("Server error:", err.message, err.stack);
+  res.status(500).json({ message: "Internal Server Error", error: err.message });
+});
 
 io.on("connection", (socket) => {
   console.log("User connected:", socket.id);
@@ -79,6 +93,11 @@ io.on("connection", (socket) => {
   socket.on("newProject", (data) => {
     console.log(`Sending project notification to freelancer ${data.freelancerId}`);
     io.emit(`notification-${data.freelancerId}`, data.message);
+  });
+
+  socket.on("join", (userId) => {
+    socket.join(userId);
+    console.log(`User ${userId} joined room`);
   });
 
   socket.on("disconnect", () => {
@@ -129,9 +148,7 @@ cron.schedule("*/15 * * * *", async () => {
   }
 });
 
-console.log(process.env.MONGO_URI);
-
-server.listen(5000, () => {
+server.listen(process.env.PORT || 5000, () => {
   connectDB();
-  console.log('Server started at http://localhost:5000');
+  console.log(`Server started at http://localhost:${process.env.PORT || 5000}`);
 });
