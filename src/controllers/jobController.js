@@ -50,7 +50,7 @@ export const getJobsAddedByYou = async (req, res) => {
 export const searchJobs = async (req, res) => {
   try {
     const { searchTerm, category, sortBy } = req.query;
-    const userId = req.user ? req.user._id : null; // Ensure user is logged in
+    const userId = req.user ? req.user._id : null; 
 
     let query = {};
 
@@ -70,7 +70,7 @@ export const searchJobs = async (req, res) => {
 
     const jobs = await Job.find(query).sort(sortOption);
 
-    //  Store search term **only if user is logged in**
+    //  Store search term 
     if (userId && searchTerm) {
       await SearchHistory.create({
         userId,
