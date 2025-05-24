@@ -70,7 +70,7 @@ export const searchJobs = async (req, res) => {
 
     const jobs = await Job.find(query).sort(sortOption);
 
-    // ✅ Store search term **only if user is logged in**
+    //  Store search term **only if user is logged in**
     if (userId && searchTerm) {
       await SearchHistory.create({
         userId,
