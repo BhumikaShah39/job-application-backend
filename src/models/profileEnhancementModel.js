@@ -1,4 +1,4 @@
-// models/profileEnhancementModel.js
+
 import mongoose from "mongoose";
 
 const profileEnhancementSchema = new mongoose.Schema({
