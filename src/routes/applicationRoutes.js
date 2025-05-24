@@ -6,7 +6,7 @@ import Application from "../models/applicationModel.js";
 import Job from "../models/jobModel.js";
 import Notification from "../models/notificationModel.js";
 import User from "../models/userModel.js";
-import ProfileEnhancement from "../models/profileEnhancementModel.js"; // Added this import
+import ProfileEnhancement from "../models/profileEnhancementModel.js";
 import { sendEmail } from "../utils/emailSender.js";
 import fs from "fs";
 import path from "path";
@@ -15,13 +15,11 @@ import Interview from "../models/interviewModel.js";
 
 const router = express.Router();
 
-// Ensure uploads directory exists
 const uploadsDir = path.join(process.cwd(), "uploads", "resumes");
 if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true });
 }
 
-// Configure multer for file uploads
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     cb(null, uploadsDir);
@@ -33,7 +31,7 @@ const storage = multer.diskStorage({
 
 const upload = multer({
   storage,
-  limits: { fileSize: 5 * 1024 * 1024 }, // Limit to 5MB
+  limits: { fileSize: 5 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
     const allowedTypes = /pdf|doc|docx/;
     const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
@@ -50,18 +48,15 @@ router.post("/applications/apply", verifyToken, upload.single("resume"), async (
   try {
     const { jobId, coverLetter } = req.body;
 
-    // Validate required fields
     if (!jobId || !coverLetter) {
       return res.status(400).json({ message: "Job ID and cover letter are required" });
     }
 
-    // Check if job exists
     const job = await Job.findById(jobId).populate("hirer", "email");
     if (!job) {
       return res.status(404).json({ message: "Job not found" });
     }
 
-    // Check if hirer exists
     if (!job.hirer || !job.hirer._id) {
       return res.status(400).json({ message: "Hirer information is missing for this job" });
     }
@@ -73,13 +68,11 @@ router.post("/applications/apply", verifyToken, upload.single("resume"), async (
       resume: req.file ? req.file.path : null,
     };
 
-    // Save the application to the database
     const application = await Application.create(newApplication);
     if (!application) {
       throw new Error("Failed to save application to the database");
     }
 
-    // Create In-App Notification for the hirer
     const notification = new Notification({
       hirerId: job.hirer._id,
       message: `You received a new application for "${job.title}".`,
@@ -87,7 +80,6 @@ router.post("/applications/apply", verifyToken, upload.single("resume"), async (
     });
     await notification.save();
 
-    // Send Real-Time Notification
     const io = req.app.get("io");
     if (io) {
       io.to(job.hirer._id.toString()).emit("newApplication", {
@@ -95,27 +87,16 @@ router.post("/applications/apply", verifyToken, upload.single("resume"), async (
         message: notification.message,
         applicationId: application._id,
       });
-      console.log("Real-time notification sent to hirer:", job.hirer._id);
-    } else {
-      console.warn("Socket.IO instance not found");
     }
 
-    // Send Email Notification
     if (job.hirer.email) {
-      try {
-        await sendEmail(job.hirer.email, "New Job Application Received", notification.message);
-        console.log("Email notification sent to hirer:", job.hirer.email);
-      } catch (emailError) {
-        console.warn("Email sending failed:", emailError.message);
-        // Continue even if email fails
-      }
+      await sendEmail(job.hirer.email, "New Job Application Received", notification.message);
     }
 
     res.status(201).json({ message: "Application submitted successfully", application });
   } catch (error) {
     console.error("Error submitting application:", error.message, error.stack);
 
-    // Clean up uploaded file if it exists
     if (req.file) {
       fs.unlink(req.file.path, (err) => {
         if (err) console.error("Error deleting uploaded file:", err);
@@ -129,7 +110,6 @@ router.post("/applications/apply", verifyToken, upload.single("resume"), async (
 // Get all applications for a hirer
 router.get("/applications/hirer", verifyToken, async (req, res) => {
   try {
-    // Validate req.user._id
     if (!req.user._id) {
       return res.status(400).json({ message: "User ID is missing in the request" });
     }
@@ -143,7 +123,6 @@ router.get("/applications/hirer", verifyToken, async (req, res) => {
       })
       .populate("jobId", "title");
 
-    // Fetch enhancements for each application's user
     const applicationsWithEnhancements = await Promise.all(
       applications.map(async (app) => {
         const enhancements = await ProfileEnhancement.find({ userId: app.userId._id });
@@ -151,7 +130,6 @@ router.get("/applications/hirer", verifyToken, async (req, res) => {
       })
     );
 
-    console.log("Applications fetched for hirer:", req.user._id, applicationsWithEnhancements);
     res.status(200).json(applicationsWithEnhancements);
   } catch (error) {
     console.error("Error fetching applications", error);
@@ -159,25 +137,22 @@ router.get("/applications/hirer", verifyToken, async (req, res) => {
   }
 });
 
-// New route to get accepted applications with completed interviews for a hirer
-router.get("/applications/hirer/accepted", verifyToken, async (req, res) => {
+// Updated route to get pending applications (previously "accepted")
+router.get("/applications/hirer/pending-decision", verifyToken, async (req, res) => {
   try {
-    // Validate req.user._id
     if (!req.user._id) {
       return res.status(400).json({ message: "User ID is missing in the request" });
     }
     const jobs = await Job.find({ hirer: req.user._id });
     const jobIds = jobs.map((job) => job._id);
 
-    // Fetch applications with status "Accepted" or "Hired"
     const applications = await Application.find({
       jobId: { $in: jobIds },
-      status: { $in: ["Accepted", "Hired"] },
+      status: "MeetingCompleted",
     })
       .populate("userId", "firstName lastName email skills education github linkedin")
       .populate("jobId", "title");
 
-    // Fetch interviews for these applications and filter for completed ones
     const applicationsWithInterviews = await Promise.all(
       applications.map(async (app) => {
         const interview = await Interview.findOne({
@@ -188,15 +163,46 @@ router.get("/applications/hirer/accepted", verifyToken, async (req, res) => {
       })
     );
 
-    // Only return applications with completed interviews
     const filteredApplications = applicationsWithInterviews.filter(
       (app) => app.interview
     );
 
-    console.log("Accepted applications with completed interviews fetched for hirer:", req.user._id, filteredApplications);
     res.status(200).json(filteredApplications);
   } catch (error) {
-    console.error("Error fetching accepted applications:", error);
+    console.error("Error fetching pending applications:", error);
+    res.status(500).json({ message: "Internal Server Error" });
+  }
+});
+
+// New route to get hired applicants
+router.get("/applications/hirer/hired", verifyToken, async (req, res) => {
+  try {
+    if (!req.user._id) {
+      return res.status(400).json({ message: "User ID is missing in the request" });
+    }
+    const jobs = await Job.find({ hirer: req.user._id });
+    const jobIds = jobs.map((job) => job._id);
+
+    const applications = await Application.find({
+      jobId: { $in: jobIds },
+      status: "Hired",
+    })
+      .populate("userId", "firstName lastName email skills education github linkedin")
+      .populate("jobId", "title");
+
+    const applicationsWithInterviews = await Promise.all(
+      applications.map(async (app) => {
+        const interview = await Interview.findOne({
+          applicationId: app._id,
+          status: "Completed",
+        });
+        return { ...app.toObject(), interview };
+      })
+    );
+
+    res.status(200).json(applicationsWithInterviews);
+  } catch (error) {
+    console.error("Error fetching hired applicants:", error);
     res.status(500).json({ message: "Internal Server Error" });
   }
 });
@@ -204,7 +210,6 @@ router.get("/applications/hirer/accepted", verifyToken, async (req, res) => {
 // Get applications for a freelancer
 router.get("/applications/freelancer", verifyToken, async (req, res) => {
   try {
-    // Validate req.user._id
     if (!req.user._id) {
       return res.status(400).json({ message: "User ID is missing in the request" });
     }
@@ -212,7 +217,6 @@ router.get("/applications/freelancer", verifyToken, async (req, res) => {
       "jobId",
       "title company location jobType"
     );
-    console.log("Applications fetched for freelancer:", req.user._id, applications);
     res.status(200).json(applications);
   } catch (error) {
     console.error("Error fetching freelancer applications", error.message);
@@ -220,10 +224,9 @@ router.get("/applications/freelancer", verifyToken, async (req, res) => {
   }
 });
 
-// Update application status (Accept/Reject)
+// Update application status (Schedule Meeting/Reject)
 router.put("/applications/:id/status", verifyToken, async (req, res) => {
   try {
-    // Validate req.user._id
     if (!req.user._id) {
       return res.status(400).json({ message: "User ID is missing in the request" });
     }
@@ -244,13 +247,20 @@ router.put("/applications/:id/status", verifyToken, async (req, res) => {
       return res.status(403).json({ message: "Unauthorized: You are not the hirer for this job" });
     }
 
-    application.status = applicationStatus;
+    if (applicationStatus === "MeetingScheduled") {
+      application.status = "MeetingScheduled";
+    } else if (applicationStatus === "Rejected") {
+      application.status = "Rejected";
+    } else {
+      return res.status(400).json({ message: "Invalid status update" });
+    }
+
     await application.save();
 
     const notification = new Notification({
       freelancerId: application.userId._id,
-      message: applicationStatus === "Accepted"
-        ? `Your application for "${application.jobId.title}" at ${application.jobId.company} has been accepted! 🎉`
+      message: applicationStatus === "MeetingScheduled"
+        ? `An interview has been scheduled for "${application.jobId.title}" at ${application.jobId.company}.`
         : `Unfortunately, your application for "${application.jobId.title}" at ${application.jobId.company} was rejected. 😔`,
     });
     await notification.save();
@@ -262,8 +272,6 @@ router.put("/applications/:id/status", verifyToken, async (req, res) => {
         message: notification.message,
         applicationId: application._id,
       });
-    } else {
-      console.warn("Socket.IO instance not found");
     }
 
     if (application.userId.email) {
@@ -275,33 +283,27 @@ router.put("/applications/:id/status", verifyToken, async (req, res) => {
         
         - **Role**: ${application.jobId.title}
         - **Company**: ${application.jobId.company}
-        - **Status**: ${applicationStatus === "Accepted" ? "Approved" : "Rejected"}
+        - **Status**: ${applicationStatus === "MeetingScheduled" ? "Interview Scheduled" : "Rejected"}
         
         ${
-          applicationStatus === "Accepted"
-            ? "Congratulations! The hirer has accepted your application. Check your 'My Applications' page for more details."
+          applicationStatus === "MeetingScheduled"
+            ? "Please check your 'Scheduled Meetings' page for more details."
             : "We’re sorry to inform you that your application was not successful this time. Keep applying to other opportunities!"
         }
         
         Best regards,
         The Karya Team
       `;
-      try {
-        await sendEmail(application.userId.email, emailSubject, emailBody);
-      } catch (emailError) {
-        console.warn("Email sending failed:", emailError.message);
-      }
+      await sendEmail(application.userId.email, emailSubject, emailBody);
     }
 
     const user = await User.findById(req.user._id);
     if (!user) {
       return res.status(404).json({ message: "User not found" });
     }
-    // Check if the hirer has authenticated with Google
     const isGoogleAuthenticated = !!user.googleTokens;
-    console.log("User Google Authenticated:", isGoogleAuthenticated);
     res.status(200).json({
-      message: `Application ${applicationStatus} successfully`,
+      message: `Application ${applicationStatus === "MeetingScheduled" ? "scheduled for interview" : "rejected"} successfully`,
       isGoogleAuthenticated,
       applicationId: application._id,
     });
@@ -311,7 +313,7 @@ router.put("/applications/:id/status", verifyToken, async (req, res) => {
   }
 });
 
-// New route to confirm hiring after an interview
+// Confirm hiring after an interview
 router.put("/applications/:id/confirm-hire", verifyToken, async (req, res) => {
   try {
     const application = await Application.findById(req.params.id)
@@ -330,7 +332,6 @@ router.put("/applications/:id/confirm-hire", verifyToken, async (req, res) => {
       return res.status(403).json({ message: "Unauthorized: You are not the hirer for this job" });
     }
 
-    // Check if there's a completed interview associated with this application
     const interview = await Interview.findOne({
       applicationId: req.params.id,
       status: "Completed",
@@ -347,7 +348,6 @@ router.put("/applications/:id/confirm-hire", verifyToken, async (req, res) => {
     application.status = "Hired";
     await application.save();
 
-    // Notify the freelancer
     const notification = new Notification({
       freelancerId: application.userId._id,
       message: `You have been hired for the job "${application.jobId.title}" at ${application.jobId.company}! 🎉`,
@@ -361,8 +361,6 @@ router.put("/applications/:id/confirm-hire", verifyToken, async (req, res) => {
         message: notification.message,
         applicationId: application._id,
       });
-    } else {
-      console.warn("Socket.IO instance not found");
     }
 
     if (application.userId.email) {
@@ -395,7 +393,6 @@ router.post("/interviews", verifyToken, async (req, res) => {
     }
     const { applicationId, scheduledTime } = req.body;
 
-    // Validate request
     if (!applicationId || !scheduledTime) {
       return res.status(400).json({ message: "Application ID and scheduled time are required" });
     }
@@ -405,13 +402,11 @@ router.post("/interviews", verifyToken, async (req, res) => {
       return res.status(400).json({ message: "Invalid scheduled time format" });
     }
 
-    // Ensure the scheduled time is in the future
     const now = new Date();
     if (scheduledDate <= now) {
       return res.status(400).json({ message: "Scheduled time must be in the future" });
     }
 
-    // Fetch the hirer to get Google OAuth tokens
     const user = await User.findById(req.user._id);
     if (!user) {
       return res.status(404).json({ message: "User not found" });
@@ -431,24 +426,16 @@ router.post("/interviews", verifyToken, async (req, res) => {
       if (tokens.refresh_token) {
         user.googleTokens = tokens;
         await user.save();
-        console.log("Google OAuth tokens updated for user:", user._id);
       }
     });
 
     oauth2Client.setCredentials(user.googleTokens);
 
     if (user.googleTokens.expiry_date && user.googleTokens.expiry_date <= Date.now()) {
-      console.log("Access token expired, attempting to refresh...");
-      try {
-        const { credentials } = await oauth2Client.refreshAccessToken();
-        user.googleTokens = credentials;
-        await user.save();
-        console.log("Access token refreshed successfully for user:", user._id);
-        oauth2Client.setCredentials(credentials);
-      } catch (refreshError) {
-        console.error("Error refreshing access token:", refreshError.message, refreshError.stack);
-        return res.status(401).json({ message: "Failed to refresh Google access token. Please re-authenticate with Google." });
-      }
+      const { credentials } = await oauth2Client.refreshAccessToken();
+      user.googleTokens = credentials;
+      await user.save();
+      oauth2Client.setCredentials(credentials);
     }
 
     const calendar = google.calendar({ version: "v3", auth: oauth2Client });
@@ -472,11 +459,12 @@ router.post("/interviews", verifyToken, async (req, res) => {
       return res.status(403).json({ message: "Unauthorized: You are not the hirer for this job" });
     }
 
+    // Update application status to "MeetingScheduled"
+    application.status = "MeetingScheduled";
+    await application.save();
+
     const freelancerEmail = application.userId?.email;
     const hirerEmail = application.jobId.hirer?.email;
-
-    console.log("Freelancer Email:", freelancerEmail);
-    console.log("Hirer Email:", hirerEmail);
 
     if (!freelancerEmail || !hirerEmail) {
       return res.status(400).json({ message: "Freelancer or hirer email is missing" });
@@ -518,8 +506,6 @@ router.post("/interviews", verifyToken, async (req, res) => {
       },
     };
 
-    console.log("Creating Google Calendar event with data:", JSON.stringify(event, null, 2));
-
     const calendarEvent = await calendar.events.insert({
       calendarId: "primary",
       resource: event,
@@ -538,7 +524,6 @@ router.post("/interviews", verifyToken, async (req, res) => {
       googleEventId,
     });
     await interview.save();
-    console.log("Interview saved to database:", interview);
 
     const io = req.app.get("io");
     if (io) {
@@ -548,9 +533,6 @@ router.post("/interviews", verifyToken, async (req, res) => {
         meetLink,
         scheduledTime: scheduledDate.toISOString(),
       });
-      console.log("Real-time notification sent to freelancer:", application.userId._id);
-    } else {
-      console.warn("Socket.IO instance not found");
     }
 
     if (application.userId.email) {
@@ -567,11 +549,7 @@ router.post("/interviews", verifyToken, async (req, res) => {
         Best regards,
         The Karya Team
       `;
-      try {
-        await sendEmail(application.userId.email, emailSubject, emailBody);
-      } catch (emailError) {
-        console.warn("Email sending failed:", emailError.message);
-      }
+      await sendEmail(application.userId.email, emailSubject, emailBody);
     }
 
     if (application.jobId.hirer.email) {
@@ -589,12 +567,7 @@ router.post("/interviews", verifyToken, async (req, res) => {
         Best regards,
         The Karya Team
       `;
-      try {
-        await sendEmail(application.jobId.hirer.email, emailSubject, emailBody);
-        console.log("Email notification sent to hirer:", application.jobId.hirer.email);
-      } catch (emailError) {
-        console.warn("Email sending failed for hirer:", emailError.message);
-      }
+      await sendEmail(application.jobId.hirer.email, emailSubject, emailBody);
     }
 
     res.status(201).json({ message: "Interview scheduled successfully", interview });
@@ -640,7 +613,7 @@ router.get("/interviews", verifyToken, async (req, res) => {
   }
 });
 
-// PUT /api/interviews/:id - Reschedule Interview
+// PUT /api/interviews/:id - Reschedule Interview (No status change needed here)
 router.put("/interviews/:id", verifyToken, async (req, res) => {
   try {
     const { scheduledTime } = req.body;
@@ -660,7 +633,6 @@ router.put("/interviews/:id", verifyToken, async (req, res) => {
     interview.scheduledTime = new Date(scheduledTime);
     await interview.save();
 
-    // Notify freelancer
     const freelancer = interview.applicationId.userId;
     const job = interview.applicationId.jobId;
 
@@ -692,7 +664,7 @@ router.put("/interviews/:id", verifyToken, async (req, res) => {
 // DELETE /api/interviews/:id - Cancel Interview
 router.delete("/interviews/:id", verifyToken, async (req, res) => {
   try {
-    const { cancelReason } = req.body; // Get the cancellation reason from the request body
+    const { cancelReason } = req.body;
     if (!cancelReason || !cancelReason.trim()) {
       return res.status(400).json({ message: "Cancellation reason is required" });
     }
@@ -708,6 +680,13 @@ router.delete("/interviews/:id", verifyToken, async (req, res) => {
 
     if (interview.createdBy.toString() !== req.user._id)
       return res.status(403).json({ message: "Unauthorized" });
+
+    // Update application status back to "Pending" if the interview is cancelled
+    const application = await Application.findById(interview.applicationId._id);
+    if (application) {
+      application.status = "Pending";
+      await application.save();
+    }
 
     interview.status = "Cancelled";
     await interview.save();
@@ -767,14 +746,23 @@ router.put("/interviews/:id/status", verifyToken, async (req, res) => {
     interview.status = status;
     await interview.save();
 
+    // Update application status based on interview status
+    const application = await Application.findById(interview.applicationId._id);
+    if (application) {
+      if (status === "Completed") {
+        application.status = "MeetingCompleted";
+      } else if (status === "Failed") {
+        application.status = "Rejected";
+      }
+      await application.save();
+    }
+
     const io = req.app.get("io");
-    // Notify freelancer
     io.to(interview.applicationId.userId._id.toString()).emit("interviewStatusUpdate", {
       interviewId: interview._id.toString(),
       status,
       message: `The interview for "${interview.applicationId.jobId.title}" has been marked as ${status}.`,
     });
-    // Notify hirer
     io.to(interview.applicationId.jobId.hirer._id.toString()).emit("interviewStatusUpdate", {
       interviewId: interview._id.toString(),
       status,
