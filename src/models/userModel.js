@@ -13,7 +13,7 @@ const userSchema = new mongoose.Schema({
     type: String,
     required: true,
     unique: true,
-    match: [/.+\@.+\..+/, 'Please fill a valid email address'],
+    match: [/.+\@.+\..+/, "Please fill a valid email address"],
   },
   password: {
     type: String,
@@ -63,42 +63,55 @@ const userSchema = new mongoose.Schema({
     default: null,
   },
   pastWork: {
-    type: [{
-      title: { type: String },
-      description: { type: String },
-      duration: { type: String },
-    }],
+    type: [
+      {
+        title: { type: String },
+        description: { type: String },
+        duration: { type: String },
+      },
+    ],
   },
-  ratings: [{
-    ratedBy: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
+  ratings: [
+    {
+      ratedBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+      },
+      rating: {
+        type: Number,
+        min: 1,
+        max: 5,
+        default: null,
+      },
+      comment: {
+        type: String,
+      },
+      project: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Project",
+      },
+      date: {
+        type: Date,
+        default: Date.now,
+      },
     },
-    rating: {
-      type: Number,
-      min: 1,
-      max: 5,
-      default: null,
-    },
-    comment: {
-      type: String,
-    },
-    date: {
-      type: Date,
-      default: Date.now,
-    },
-  }],
+  ],
   resetPasswordToken: {
     type: String,
   },
   resetPasswordExpires: {
     type: Date,
   },
-  khaltiId: { // New field for storing Khalti ID (phone number)
+  khaltiId: {
     type: String,
     default: null,
-    match: [/^\d{10}$/, 'Please enter a valid 10-digit phone number'],
+    match: [/^\d{10}$/, "Please enter a valid 10-digit phone number"],
+  },
+  badge: {
+    type: String,
+    enum: ["gold", "silver", "bronze", null],
+    default: null,
   },
 }, { timestamps: true });
 
-export default mongoose.model('User', userSchema);
+export default mongoose.model("User", userSchema);
