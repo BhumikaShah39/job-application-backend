@@ -6,7 +6,8 @@ import jwt from "jsonwebtoken";
 import User from "../models/userModel.js";
 import nodemailer from "nodemailer";
 import crypto from "crypto";
-import bcrypt from "bcrypt"; // Ensure bcrypt is imported
+import bcrypt from "bcrypt";
+import verifyToken from "../middlewares/authMiddleware.js";
 
 const router = express.Router();
 
@@ -33,6 +34,27 @@ oauth2Client.on("tokens", async (tokens) => {
       await user.save();
       console.log("Google OAuth tokens updated for user:", user._id);
     }
+  }
+});
+
+// Check if the user is authenticated with Google
+router.get("/check-google-auth", verifyToken, async (req, res) => {
+  try {
+    const userId = req.user._id;
+    console.log("Checking Google auth for userId:", userId);
+    const user = await User.findById(userId);
+
+    if (!user) {
+      console.log("User not found for userId:", userId);
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    const isGoogleAuthenticated = !!user.googleTokens && user.googleTokens.expiry_date > Date.now();
+    console.log("Google authentication status:", isGoogleAuthenticated);
+    res.status(200).json({ message: "Google authentication status checked", isGoogleAuthenticated });
+  } catch (error) {
+    console.error("Error checking Google authentication:", error.message, error.stack);
+    res.status(500).json({ message: "Internal server error", error: error.message });
   }
 });
 
@@ -190,11 +212,20 @@ router.post("/forgot-password", async (req, res) => {
 router.post("/reset-password", async (req, res) => {
   try {
     const { token, newPassword } = req.body;
-    console.log("Reset password request received with token:", token, "newPassword:", newPassword);
+    console.log("Reset password request received with token:", token);
 
     if (!token || !newPassword) {
       console.log("Missing token or newPassword");
       return res.status(400).json({ message: "Token and new password are required" });
+    }
+
+    const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
+    if (!passwordRegex.test(newPassword)) {
+      console.log("Invalid password format");
+      return res.status(400).json({
+        message: "Invalid password format",
+        error: "Password must be at least 8 characters long and include at least one uppercase letter, one lowercase letter, one number, and one special character (@$!%*?&)",
+      });
     }
 
     console.log("Searching for user with token:", token);
@@ -211,7 +242,7 @@ router.post("/reset-password", async (req, res) => {
     console.log("Hashing new password...");
     const saltRounds = 10;
     const hashedPassword = await bcrypt.hash(newPassword, saltRounds);
-    console.log("Hashed password:", hashedPassword);
+    console.log("Hashed password generated");
 
     user.password = hashedPassword;
     user.resetPasswordToken = undefined;
