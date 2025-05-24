@@ -5,10 +5,10 @@ import User from "../models/userModel.js";
 import ProfileEnhancement from "../models/profileEnhancementModel.js";
 import multer from "multer";
 import bcrypt from "bcrypt";
+import { getUserWithBadge, getCurrentUserWithBadge } from "../controllers/userController.js";
 
 const router = express.Router();
 
-// Configure multer for file uploads
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     cb(null, "uploads/");
@@ -20,7 +20,6 @@ const storage = multer.diskStorage({
 
 const upload = multer({ storage });
 
-// Admin access
 router.get("/admin/:id", verifyToken, authorizeRoles("admin"), async (req, res) => {
   try {
     const { id } = req.params;
@@ -34,7 +33,6 @@ router.get("/admin/:id", verifyToken, authorizeRoles("admin"), async (req, res) 
   }
 });
 
-// Hirer access
 router.get("/hirer/:id", verifyToken, authorizeRoles("hirer"), async (req, res) => {
   try {
     const { id } = req.params;
@@ -48,7 +46,6 @@ router.get("/hirer/:id", verifyToken, authorizeRoles("hirer"), async (req, res) 
   }
 });
 
-// Freelancer/User access
 router.get("/user/:id", verifyToken, authorizeRoles("user"), async (req, res) => {
   try {
     const { id } = req.params;
@@ -56,7 +53,7 @@ router.get("/user/:id", verifyToken, authorizeRoles("user"), async (req, res) =>
       return res.status(403).json({ message: "Unauthorized access" });
     }
     const user = await User.findById(id).select(
-      "firstName lastName email isProfileComplete interests education skills linkedin github experience"
+      "firstName lastName email isProfileComplete interests education skills linkedin github experience badge"
     );
     if (!user) {
       return res.status(404).json({ message: "User not found" });
@@ -68,7 +65,6 @@ router.get("/user/:id", verifyToken, authorizeRoles("user"), async (req, res) =>
   }
 });
 
-// Get total number of users
 router.get("/count", verifyToken, authorizeRoles("admin"), async (req, res) => {
   try {
     const userCount = await User.countDocuments({});
@@ -79,7 +75,6 @@ router.get("/count", verifyToken, authorizeRoles("admin"), async (req, res) => {
   }
 });
 
-// Get all users
 router.get("/", verifyToken, authorizeRoles("admin"), async (req, res) => {
   try {
     const users = await User.find().select("-password");
@@ -90,7 +85,6 @@ router.get("/", verifyToken, authorizeRoles("admin"), async (req, res) => {
   }
 });
 
-// Delete a user (Admin only)
 router.delete("/:id", verifyToken, authorizeRoles("admin"), async (req, res) => {
   try {
     const { id } = req.params;
@@ -105,7 +99,6 @@ router.delete("/:id", verifyToken, authorizeRoles("admin"), async (req, res) => 
   }
 });
 
-// Update profile for freelancers
 router.put(
   "/complete-profile",
   verifyToken,
@@ -113,10 +106,9 @@ router.put(
   upload.single("profilePicture"),
   async (req, res) => {
     try {
-      const { interests, education, skills, linkedin, github, experience, khaltiId } = req.body; // Added khaltiId
+      const { interests, education, skills, linkedin, github, experience, khaltiId } = req.body;
       const userId = req.user._id;
 
-      // Parse the incoming data
       const parsedInterests = JSON.parse(interests);
       const parsedEducation = JSON.parse(education);
       const parsedSkills = JSON.parse(skills);
@@ -127,23 +119,20 @@ router.put(
         return res.status(404).json({ message: "User not found" });
       }
 
-      // Update profile picture if provided
       if (req.file) {
         user.profilePicture = req.file.path;
       }
 
-      // Update fields
       user.interests = parsedInterests || [];
       user.education = parsedEducation || [];
       user.skills = parsedSkills || [];
       user.linkedin = linkedin || "";
       user.github = github || "";
       user.experience = parsedExperience || [];
-      if (khaltiId) { // Update khaltiId if provided
+      if (khaltiId) {
         user.khaltiId = khaltiId;
       }
 
-      // Role-specific isProfileComplete logic
       let isComplete;
       if (user.role === "user") {
         isComplete =
@@ -178,41 +167,14 @@ router.put(
   }
 );
 
+router.get("/current", verifyToken, getCurrentUserWithBadge);
 
-// userRoutes.js (fixed)
-router.get("/current", verifyToken, async (req, res) => {
-  try {
-    console.log("Fetching user with ID:", req.user._id);
-    if (!req.user._id) {
-      console.log("No user ID found in token");
-      return res.status(400).json({ message: "Invalid token: No user ID found" });
-    }
-
-    const user = await User.findById(req.user._id).select(
-      "firstName lastName email role skills education profilePicture linkedin github interests experience isProfileComplete khaltiId createdAt updatedAt"
-    );
-    if (!user) {
-      console.log("User not found for ID:", req.user._id);
-      return res.status(404).json({ message: "User not found" });
-    }
-
-    console.log("User fetched successfully:", user);
-    const userData = user.toJSON();
-    userData.khaltiId = user.khaltiId || ""; // Fallback to empty string
-    res.status(200).json({ user: userData });
-  } catch (error) {
-    console.error("Error in /api/users/current:", error.message, error.stack);
-    res.status(500).json({ message: "Internal server error", error: error.message });
-  }
-});
-// Get user analytics (updated for daily stats)
 router.get("/analytics", verifyToken, authorizeRoles("admin"), async (req, res) => {
   try {
     const totalUsers = await User.countDocuments();
     const hirers = await User.countDocuments({ role: "hirer" });
     const freelancers = await User.countDocuments({ role: "user" });
 
-    // Calculate user growth (daily signups)
     const dailyStats = await User.aggregate([
       {
         $group: {
@@ -225,10 +187,10 @@ router.get("/analytics", verifyToken, authorizeRoles("admin"), async (req, res) 
     ]);
 
     res.status(200).json({
-      totalCount: totalUsers,  // Changed to match frontend expectation
-      dailyStats,              // Changed to daily stats in expected format
-      hirers,                  // Keeping additional data
-      freelancers,             // Keeping additional data
+      totalCount: totalUsers,
+      dailyStats,
+      hirers,
+      freelancers,
     });
   } catch (error) {
     console.error("Error fetching user analytics:", error);
@@ -251,7 +213,6 @@ router.put(
         return res.status(404).json({ message: "User not found" });
       }
 
-      // Validate current password if provided
       if (currentPassword || newPassword) {
         if (!currentPassword) {
           return res.status(400).json({ message: "Current password is required to update password" });
@@ -262,6 +223,14 @@ router.put(
         }
         if (!newPassword) {
           return res.status(400).json({ message: "New password is required to update password" });
+        }
+        // Validate new password against regex
+        const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
+        if (!passwordRegex.test(newPassword)) {
+          return res.status(400).json({
+            message:
+              "New password must be at least 8 characters long and include at least one uppercase letter, one lowercase letter, one number, and one special character (@$!%*?&)",
+          });
         }
         const saltRounds = 10;
         user.password = await bcrypt.hash(newPassword, saltRounds);
@@ -283,7 +252,6 @@ router.put(
   }
 );
 
-// Update hirer-specific details (business details, past work)
 router.put(
   "/update-hirer-profile",
   verifyToken,
@@ -293,14 +261,13 @@ router.put(
       const { businessDetails, pastWork } = req.body;
       const userId = req.user._id;
 
-      console.log("Request body:", req.body); // Log the incoming request body
+      console.log("Request body:", req.body);
 
       const user = await User.findById(userId);
       if (!user) {
         return res.status(404).json({ message: "User not found" });
       }
 
-      // Update fields directly without JSON.parse since data is already a JavaScript object
       if (businessDetails) {
         console.log("Updating businessDetails:", businessDetails);
         user.businessDetails = businessDetails;
@@ -344,18 +311,15 @@ router.post(
       const { type, details } = req.body;
       const userId = req.user._id;
 
-      // Validate required fields
       if (!type || !details) {
         return res.status(400).json({ message: "Type and details are required" });
       }
 
-      // Validate type against enum
       const validTypes = ["certification", "achievement", "portfolio"];
       if (!validTypes.includes(type)) {
         return res.status(400).json({ message: "Invalid enhancement type" });
       }
 
-      // Parse details safely
       let parsedDetails;
       try {
         parsedDetails = JSON.parse(details);
@@ -364,12 +328,10 @@ router.post(
         return res.status(400).json({ message: "Invalid details format" });
       }
 
-      // Add images to parsedDetails if files were uploaded
       if (req.files && req.files.length > 0) {
         parsedDetails.images = req.files.map((file) => file.path);
       }
 
-      // Create and save the enhancement
       const enhancement = new ProfileEnhancement({
         userId,
         type,
@@ -385,83 +347,33 @@ router.post(
   }
 );
 
-// Get freelancer enhancements (already implemented)
 router.get(
-  "/enhancements",
+  "/:id/enhancements",
   verifyToken,
-  authorizeRoles("user"),
   async (req, res) => {
     try {
-      const userId = req.user._id;
-      const enhancements = await ProfileEnhancement.find({ userId });
+      const { id } = req.params;
+      
+      // Verify the user exists
+      const user = await User.findById(id);
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      // Fetch enhancements for this user
+      const enhancements = await ProfileEnhancement.find({ userId: id });
       res.status(200).json(enhancements);
     } catch (error) {
-      console.error("Error fetching enhancements:", error);
+      console.error("Error fetching user enhancements:", error);
       res.status(500).json({ message: "Internal server error" });
     }
   }
 );
 
-// Get user details by ID (for viewing hirer/freelancer details)
 router.get(
   "/:id",
   verifyToken,
-  async (req, res) => {
-    try {
-      // Validate ObjectId format to prevent CastError
-      const { id } = req.params;
-      if (!id.match(/^[0-9a-fA-F]{24}$/)) {
-        return res.status(400).json({ message: "Invalid user ID format" });
-      }
-
-      const user = await User.findById(id)
-        .select("-password -googleTokens")
-        .populate("ratings.ratedBy", "firstName lastName role")
-        .lean(); // Use lean() to convert to plain JavaScript object for better error handling
-
-      if (!user) {
-        return res.status(404).json({ message: "User not found" });
-      }
-
-      // Handle enhancements for freelancers
-      let enhancements = [];
-      if (user.role === "user") {
-        enhancements = await ProfileEnhancement.find({ userId: id }).lean();
-      }
-
-      res.status(200).json({ user, enhancements });
-    } catch (error) {
-      console.error("Error fetching user:", error.message, error.stack);
-      if (error.name === "CastError") {
-        return res.status(400).json({ message: "Invalid user ID" });
-      }
-      res.status(500).json({ message: "Internal server error", error: error.message });
-    }
-  }
-);
-
-router.post(
-  "/rate/:id",
-  verifyToken,
-  async (req, res) => {
-    const { rating, comment } = req.body;
-    const userId = req.params.id;
-    const raterId = req.user._id;
-
-    const user = await User.findById(userId);
-    if (!user) {
-      return res.status(404).json({ message: "User not found" });
-    }
-
-    user.ratings.push({
-      ratedBy: raterId,
-      rating,
-      comment,
-    });
-    await user.save();
-
-    res.status(200).json({ message: "Rating submitted successfully" });
-  }
+  getUserWithBadge
 );
 
 export default router;
