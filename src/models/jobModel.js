@@ -1,4 +1,3 @@
-// job-application-backend/src/models/jobModel.js
 import mongoose from "mongoose";
 
 const jobSchema = new mongoose.Schema(
@@ -18,11 +17,6 @@ const jobSchema = new mongoose.Schema(
     },
     category: { type: String, required: true },
     subCategory: { type: String, required: true },
-    notificationPreference: {
-      type: String,
-      enum: ["In-app", "Email", "Both"],
-      default: "In-app",
-    },
     description: { type: String, required: true },
     hirer: {
       type: mongoose.Schema.Types.ObjectId,
