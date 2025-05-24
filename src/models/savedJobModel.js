@@ -1,4 +1,4 @@
-// models/savedJobModel.js
+
 import mongoose from "mongoose";
 
 const savedJobSchema = new mongoose.Schema({
